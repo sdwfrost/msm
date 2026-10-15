@@ -537,6 +537,29 @@ void DMatrixExpSeries(Matrix DA, Matrix A, int n, int npars, Array3 DexpA, doubl
     R_Free(tpower); R_Free(DApower); R_Free(Apower); R_Free(Temp); R_Free(Inner); R_Free(CInner);
 }
 
+/* Derivatives of exp(At) from the block-triangular identity (Van Loan 1978)
+   exp(t [[A, dA], [0, A]]) = [[exp(At), d exp(At)], [0, exp(At)]] */
+
+void DMatrixExpBlock(Array3 DA, Matrix A, int n, int npars, Array3 DexpA, double t)
+{
+    int i, j, p, m = 2*n;
+    Matrix B = (Matrix) R_Calloc(m*m, double);
+    Matrix expB = (Matrix) R_Calloc(m*m, double);
+    for (i=0; i<n; ++i)
+	for (j=0; j<n; ++j)
+	    B[MI(i,j,m)] = B[MI(n+i,n+j,m)] = A[MI(i,j,n)] * t;
+    for (p=0; p<npars; ++p) {
+	for (i=0; i<n; ++i)
+	    for (j=0; j<n; ++j)
+		B[MI(i,n+j,m)] = DA[MI3(i,j,p,n,n)] * t;
+	expm(B, m, expB, Ward_2);
+	for (i=0; i<n; ++i)
+	    for (j=0; j<n; ++j)
+		DexpA[MI3(i,j,p,n,n)] = expB[MI(i,n+j,m)];
+    }
+    R_Free(B); R_Free(expB);
+}
+
 void dpijdeath(int r, int s, Array3 dpmat, Matrix pmat, Array3 dqmat, Matrix qmat, int n, int npars, vector dcontrib)
 {
     int k, p=0;
@@ -571,7 +594,7 @@ void DPmat(Array3 dpmat, double t, Array3 dqmat, Matrix qmat, int n, int npars, 
 	if (err > 0)
 	    REprintf("error code %d from EISPACK eigensystem routine rg\n", err);
 	if (repeated_entries (revals, n)) {
-	    DMatrixExpSeries(dqmat, qmat, n, npars, dpmat, t);
+	    DMatrixExpBlock(dqmat, qmat, n, npars, dpmat, t);
 	}
 	else {
 	    MatInv(evecs, evecsinv, n);
